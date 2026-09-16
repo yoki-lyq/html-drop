@@ -1,0 +1,16 @@
+services:
+  html-drop:
+    build: .
+    container_name: html-drop
+    ports:
+      - "8080:8080"
+    environment:
+      - PORT=8080
+      # - UPLOAD_TOKEN=your-secret-token   # 可选：开启后上传/删除需要令牌
+      # - MAX_FILE_MB=20
+    volumes:
+      - html-drop-data:/data
+    restart: unless-stopped
+
+volumes:
+  html-drop-data:

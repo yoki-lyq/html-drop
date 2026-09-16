@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>页面目录 · HTML Drop</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
+    background: #f1f5f9; color: #1e293b; min-height: 100vh;
+    display: flex; flex-direction: column; align-items: center; padding: 48px 16px;
+  }
+  .wrap { width: 100%; max-width: 720px; }
+  h1 { font-size: 22px; margin-bottom: 6px; }
+  .sub { color: #64748b; font-size: 14px; margin-bottom: 24px; }
+  #search {
+    width: 100%; padding: 12px 16px; border-radius: 10px; border: 1px solid #cbd5e1;
+    background: #fff; outline: none; font-size: 14px; margin-bottom: 16px;
+  }
+  .item {
+    display: flex; justify-content: space-between; align-items: center;
+    background: #fff; border: 1px solid #e2e8f0; border-radius: 10px;
+    padding: 14px 18px; margin-bottom: 10px; transition: .15s;
+  }
+  .item:hover { border-color: #38bdf8; box-shadow: 0 2px 12px rgba(56,189,248,.15); }
+  .item a { color: #0369a1; text-decoration: none; font-size: 15px; word-break: break-all; }
+  .item a:hover { text-decoration: underline; }
+  .meta { color: #94a3b8; font-size: 12px; white-space: nowrap; margin-left: 16px; }
+  .empty { color: #94a3b8; text-align: center; padding: 60px 0; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>页面目录</h1>
+  <div class="sub">共 <span id="count">0</span> 个页面，点击直接访问</div>
+  <input id="search" placeholder="搜索页面…">
+  <div id="list"><div class="empty">加载中…</div></div>
+</div>
+
+<script>
+let allFiles = [];
+const listEl = document.getElementById('list');
+const searchEl = document.getElementById('search');
+searchEl.oninput = render;
+
+fetch('/api/files').then(r => r.json()).then(d => { allFiles = d.files; render(); });
+
+function render() {
+  const kw = searchEl.value.trim().toLowerCase();
+  const files = kw ? allFiles.filter(f => f.title.toLowerCase().includes(kw)) : allFiles;
+  document.getElementById('count').textContent = files.length;
+  if (!files.length) { listEl.innerHTML = '<div class="empty">' + (allFiles.length ? '无匹配结果' : '暂无页面') + '</div>'; return; }
+  listEl.innerHTML = files.map(f => `
+    <div class="item">
+      <a href="${f.url}">${f.title}</a>
+      <span class="meta">${new Date(f.mtime).toLocaleDateString('zh-CN')}</span>
+    </div>`).join('');
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>管理后台 · HTML Drop</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
+    background: #0f172a; color: #e2e8f0; min-height: 100vh;
+    display: flex; flex-direction: column; align-items: center; padding: 40px 16px;
+  }
+  .card { width: 100%; max-width: 900px; background: #1e293b; border-radius: 16px; padding: 32px; box-shadow: 0 10px 40px rgba(0,0,0,.4); }
+  .top { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 6px; }
+  h1 { font-size: 24px; }
+  .top a { color: #7dd3fc; font-size: 13px; text-decoration: none; }
+  .sub { color: #94a3b8; font-size: 14px; margin-bottom: 24px; }
+  #drop {
+    border: 2px dashed #475569; border-radius: 12px; padding: 44px 20px;
+    text-align: center; cursor: pointer; transition: .2s; color: #94a3b8;
+  }
+  #drop:hover, #drop.over { border-color: #38bdf8; background: rgba(56,189,248,.08); color: #bae6fd; }
+  #drop .big { font-size: 18px; margin-bottom: 8px; color: #e2e8f0; }
+  input[type=file] { display: none; }
+  #tokenRow { margin-top: 14px; display: none; }
+  #tokenRow input, #uriRow input {
+    width: 100%; padding: 10px 12px; border-radius: 8px; border: 1px solid #475569;
+    background: #0f172a; color: #e2e8f0; outline: none;
+  }
+  #uriRow { margin-top: 14px; }
+  #bar { height: 6px; background: #334155; border-radius: 3px; margin-top: 16px; overflow: hidden; display: none; }
+  #bar i { display: block; height: 100%; width: 0; background: #38bdf8; transition: width .2s; }
+  #msg { margin-top: 14px; font-size: 14px; min-height: 20px; word-break: break-all; }
+  #msg.ok { color: #4ade80; }
+  #msg.err { color: #f87171; }
+  #msg a { color: #7dd3fc; }
+  .listHead { display: flex; justify-content: space-between; align-items: center; margin: 28px 0 12px; }
+  h2 { font-size: 16px; color: #cbd5e1; }
+  #search {
+    padding: 8px 12px; border-radius: 8px; border: 1px solid #475569;
+    background: #0f172a; color: #e2e8f0; outline: none; width: 220px; font-size: 13px;
+  }
+  table { width: 100%; border-collapse: collapse; font-size: 14px; }
+  td, th { text-align: left; padding: 10px 8px; border-bottom: 1px solid #334155; }
+  th { color: #64748b; font-weight: 500; }
+  td a { color: #7dd3fc; text-decoration: none; }
+  td a:hover { text-decoration: underline; }
+  .title { word-break: break-all; }
+  .uri { font-family: ui-monospace, monospace; color: #a5b4fc; white-space: nowrap; }
+  .btn {
+    border: none; border-radius: 6px; padding: 4px 10px; cursor: pointer;
+    font-size: 12px; background: #334155; color: #e2e8f0; margin-right: 6px; white-space: nowrap;
+  }
+  .btn:hover { background: #475569; }
+  .btn.del { background: #7f1d1d; }
+  .btn.del:hover { background: #991b1b; }
+  .empty { color: #64748b; text-align: center; padding: 20px; }
+</style>
+</head>
+<body>
+<div class="card">
+  <div class="top">
+    <h1>HTML Drop · 管理后台</h1>
+    <a href="/" target="_blank">查看页面目录 →</a>
+  </div>
+  <div class="sub">上传后自动生成短链接 <b>/p/&lt;页面ID&gt;</b>，拼上服务器 IP 即可访问</div>
+
+  <div id="drop">
+    <div class="big">点击选择或拖拽 HTML 文件到这里</div>
+    <div>支持多选，仅 .html / .htm，单文件上限 <span id="maxMb">20</span> MB</div>
+  </div>
+  <input type="file" id="file" accept=".html,.htm" multiple>
+
+  <div id="uriRow">
+    <input id="customUri" placeholder="自定义 URI（可选，仅单文件时生效，如 q3-report；留空自动生成短链）">
+  </div>
+  <div id="tokenRow"><input id="token" placeholder="管理令牌（服务器已开启 UPLOAD_TOKEN）"></div>
+  <div id="bar"><i></i></div>
+  <div id="msg"></div>
+
+  <div class="listHead">
+    <h2>已托管页面（<span id="count">0</span>）</h2>
+    <input id="search" placeholder="搜索标题或 ID…">
+  </div>
+  <table>
+    <thead><tr><th>标题</th><th>URI</th><th>大小</th><th>上传时间</th><th>操作</th></tr></thead>
+    <tbody id="list"><tr><td colspan="5" class="empty">加载中…</td></tr></tbody>
+  </table>
+</div>
+
+<script>
+const drop = document.getElementById('drop');
+const fileInput = document.getElementById('file');
+const msg = document.getElementById('msg');
+const bar = document.getElementById('bar');
+const barI = bar.querySelector('i');
+const tokenRow = document.getElementById('tokenRow');
+const tokenInput = document.getElementById('token');
+const searchInput = document.getElementById('search');
+let needToken = false;
+let allFiles = [];
+
+fetch('/api/config').then(r => r.json()).then(c => {
+  document.getElementById('maxMb').textContent = c.maxFileMB;
+  needToken = c.needToken;
+  if (needToken) tokenRow.style.display = 'block';
+});
+
+tokenInput.value = localStorage.getItem('uploadToken') || '';
+tokenInput.addEventListener('change', () => localStorage.setItem('uploadToken', tokenInput.value));
+
+drop.onclick = () => fileInput.click();
+drop.ondragover = e => { e.preventDefault(); drop.classList.add('over'); };
+drop.ondragleave = () => drop.classList.remove('over');
+drop.ondrop = e => { e.preventDefault(); drop.classList.remove('over'); if (e.dataTransfer.files.length) doUpload(e.dataTransfer.files); };
+fileInput.onchange = () => { if (fileInput.files.length) doUpload(fileInput.files); fileInput.value = ''; };
+searchInput.oninput = renderList;
+
+function setMsg(html, cls) { msg.className = cls || ''; msg.innerHTML = html; }
+function authHeaders() { return needToken ? { 'x-upload-token': tokenInput.value } : {}; }
+
+function doUpload(fileList) {
+  const files = [...fileList];
+  if (files.some(f => !/\.html?$/i.test(f.name))) return setMsg('仅支持 .html / .htm 文件', 'err');
+  const customUri = document.getElementById('customUri').value.trim();
+  if (customUri && files.length > 1) return setMsg('自定义 URI 仅支持单文件上传', 'err');
+  const fd = new FormData();
+  files.forEach(f => fd.append('files', f));
+  if (customUri) fd.append('id', customUri);
+  const xhr = new XMLHttpRequest();
+  xhr.open('POST', '/api/upload');
+  if (needToken) xhr.setRequestHeader('x-upload-token', tokenInput.value);
+  bar.style.display = 'block'; barI.style.width = '0';
+  xhr.upload.onprogress = e => { if (e.lengthComputable) barI.style.width = (e.loaded / e.total * 100) + '%'; };
+  xhr.onload = () => {
+    bar.style.display = 'none';
+    let res; try { res = JSON.parse(xhr.responseText); } catch (e) { res = {}; }
+    if (xhr.status === 200 && res.ok) {
+      document.getElementById('customUri').value = '';
+      setMsg('上传成功：' + res.files.map(f => `<a href="${f.url}" target="_blank">${location.origin}${f.url}</a>`).join('<br>'), 'ok');
+      loadList();
+    } else {
+      setMsg('上传失败：' + (res.error || xhr.status), 'err');
+    }
+  };
+  xhr.onerror = () => { bar.style.display = 'none'; setMsg('网络错误', 'err'); };
+  xhr.send(fd);
+}
+
+function fmtSize(n) { return n < 1024 ? n + ' B' : n < 1048576 ? (n/1024).toFixed(1) + ' KB' : (n/1048576).toFixed(1) + ' MB'; }
+
+function loadList() {
+  fetch('/api/files').then(r => r.json()).then(d => { allFiles = d.files; renderList(); });
+}
+
+function renderList() {
+  const kw = searchInput.value.trim().toLowerCase();
+  const files = kw ? allFiles.filter(f => f.title.toLowerCase().includes(kw) || f.id.toLowerCase().includes(kw)) : allFiles;
+  document.getElementById('count').textContent = files.length;
+  const tb = document.getElementById('list');
+  if (!files.length) { tb.innerHTML = '<tr><td colspan="5" class="empty">' + (allFiles.length ? '无匹配结果' : '暂无页面，上传一个试试吧') + '</td></tr>'; return; }
+  tb.innerHTML = files.map(f => `
+    <tr>
+      <td class="title"><a href="${f.url}" target="_blank">${f.title}</a></td>
+      <td class="uri">${f.url}</td>
+      <td>${fmtSize(f.size)}</td>
+      <td>${new Date(f.mtime).toLocaleString('zh-CN', { hour12: false })}</td>
+      <td>
+        <button class="btn" onclick="copyLink('${f.url}')">复制链接</button>
+        <button class="btn" onclick="editUri('${f.id}')">改URI</button>
+        <button class="btn" onclick="renameFile('${f.id}', '${f.title.replace(/'/g, "\\'")}')">改标题</button>
+        <button class="btn del" onclick="delFile('${f.id}', '${f.title.replace(/'/g, "\\'")}')">删除</button>
+      </td>
+    </tr>`).join('');
+}
+
+function copyLink(url) {
+  const full = location.origin + url;
+  navigator.clipboard.writeText(full).then(() => setMsg('已复制：' + full, 'ok'));
+}
+
+function editUri(id) {
+  const nn = prompt('新 URI（3~64 位小写字母/数字/-/_）：\n当前：/p/' + id + '\n修改后旧链接会自动跳转到新链接', id);
+  if (!nn || nn === id) return;
+  fetch('/api/files/' + encodeURIComponent(id) + '/uri', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...authHeaders() },
+    body: JSON.stringify({ newId: nn }),
+  }).then(r => r.json()).then(d => {
+    if (d.ok) { setMsg('URI 已改为 <a href="' + d.url + '" target="_blank">' + location.origin + d.url + '</a>（旧链接自动跳转）', 'ok'); loadList(); }
+    else setMsg('修改失败：' + (d.error || ''), 'err');
+  });
+}
+
+function renameFile(id, oldTitle) {
+  const t = prompt('新标题（访问链接不变）：', oldTitle);
+  if (!t || t === oldTitle) return;
+  fetch('/api/files/' + id + '/rename', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...authHeaders() },
+    body: JSON.stringify({ title: t }),
+  }).then(r => r.json()).then(d => {
+    if (d.ok) { setMsg('标题已更新', 'ok'); loadList(); }
+    else setMsg('修改失败：' + (d.error || ''), 'err');
+  });
+}
+
+function delFile(id, title) {
+  if (!confirm('确认删除「' + title + '」？删除后链接立即失效')) return;
+  fetch('/api/files/' + id, { method: 'DELETE', headers: authHeaders() })
+    .then(r => r.json()).then(d => {
+      if (d.ok) { setMsg('已删除', 'ok'); loadList(); }
+      else setMsg('删除失败：' + (d.error || ''), 'err');
+    });
+}
+
+loadList();
+</script>
+</body>
+</html>
