@@ -8,10 +8,10 @@ RUN npm install --omit=dev
 COPY server.js ./
 COPY public ./public
 
-ENV PORT=8080 \
+ENV PORT=8110 \
     DATA_DIR=/data
 
 VOLUME ["/data"]
-EXPOSE 8080
+EXPOSE 8110
 
 CMD ["node", "server.js"]

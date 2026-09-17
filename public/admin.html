@@ -55,6 +55,8 @@
   .btn:hover { background: #475569; }
   .btn.del { background: #7f1d1d; }
   .btn.del:hover { background: #991b1b; }
+  .btn.open { background: #1e3a5f; }
+  .btn.open:hover { background: #1e40af; }
   .empty { color: #64748b; text-align: center; padding: 20px; }
 </style>
 </head>
@@ -168,6 +170,7 @@ function renderList() {
       <td>${new Date(f.mtime).toLocaleString('zh-CN', { hour12: false })}</td>
       <td>
         <button class="btn" onclick="copyLink('${f.url}')">复制链接</button>
+        <button class="btn open" onclick="openLink('${f.url}')">打开</button>
         <button class="btn" onclick="editUri('${f.id}')">改URI</button>
         <button class="btn" onclick="renameFile('${f.id}', '${f.title.replace(/'/g, "\\'")}')">改标题</button>
         <button class="btn del" onclick="delFile('${f.id}', '${f.title.replace(/'/g, "\\'")}')">删除</button>
@@ -177,7 +180,29 @@ function renderList() {
 
 function copyLink(url) {
   const full = location.origin + url;
-  navigator.clipboard.writeText(full).then(() => setMsg('已复制：' + full, 'ok'));
+  // navigator.clipboard 在非 HTTPS 环境下不可用，使用 execCommand fallback
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(full).then(() => setMsg('已复制：' + full, 'ok')).catch(() => fallbackCopy(full));
+  } else {
+    fallbackCopy(full);
+  }
+}
+
+function fallbackCopy(text) {
+  const ta = document.createElement('textarea');
+  ta.value = text;
+  ta.style.position = 'fixed';
+  ta.style.left = '-9999px';
+  document.body.appendChild(ta);
+  ta.select();
+  let ok = false;
+  try { ok = document.execCommand('copy'); } catch (e) {}
+  document.body.removeChild(ta);
+  setMsg(ok ? '已复制：' + text : '复制失败，请手动复制：' + text, ok ? 'ok' : 'err');
+}
+
+function openLink(url) {
+  window.open(url, '_blank');
 }
 
 function editUri(id) {
